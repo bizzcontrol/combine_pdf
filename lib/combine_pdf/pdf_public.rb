@@ -108,8 +108,8 @@ module CombinePDF
       @outlines = parser.outlines_object || {}
       @current_outline_grouper = @outlines
 
-      # Default is to change all names
-      @preserve_names = options[:preserve_names] || false
+      # Default is to preserve all names (unlike the original gem)
+      @preserve_names = options[:preserve_names] != false
 
       # rebuild the catalog, to fix wkhtmltopdf's use of static page numbers
       rebuild_catalog
