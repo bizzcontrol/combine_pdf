@@ -383,6 +383,7 @@ module CombinePDF
         start_at: 1,
         font: :Helvetica,
         margin_from_height: 45,
+        margin_from_height_landscape: 45,
         margin_from_side: 15
       }
       opt.update options
@@ -396,19 +397,21 @@ module CombinePDF
 
       # some common computations can be done only once.
       from_height = opt[:margin_from_height]
+      from_height_landscape = opt[:margin_from_height_landscape]
       from_side = opt[:margin_from_side]
       left_position = from_side
 
       (opt[:page_range] ? pages[opt[:page_range]] : pages).each do |page|
         # Get page dimensions
         mediabox = page[:CropBox] || page[:MediaBox] || [0, 0, 595.3, 841.9]
+        landscape = page.orientation == :landscape
         # set stamp text
         text = opt[:number_format] % (Array.new(format_repeater) { page_number })
         if opt[:location].include? :center
           add_opt = {}
-          if opt[:margin_from_height] && !opt[:height] && !opt[:y]
-            add_opt[:height] = mediabox[3] - mediabox[1] - (2 * opt[:margin_from_height].to_f)
-            add_opt[:y] = opt[:margin_from_height]
+          if (landscape ? opt[:margin_from_height_landscape] : opt[:margin_from_height]) && !opt[:height] && !opt[:y]
+            add_opt[:height] = mediabox[3] - mediabox[1] - (2 * (landscape ? opt[:margin_from_height_landscape] : opt[:margin_from_height]).to_f)
+            add_opt[:y] = (landscape ? opt[:margin_from_height_landscape] : opt[:margin_from_height])
           end
           if opt[:margin_from_side] && !opt[:width] && !opt[:x]
             add_opt[:width] = mediabox[2] - mediabox[0] - (2 * opt[:margin_from_side].to_f)
@@ -431,8 +434,8 @@ module CombinePDF
 
           center_position = (page_width - box_width) / 2
           right_position = page_width - from_side - box_width
-          top_position = page_height - from_height
-          bottom_position = from_height + box_height
+          top_position = page_height - (landscape ? from_height_landscape : from_height)
+          bottom_position = (landscape ? from_height_landscape : from_height) + box_height
 
           if opt[:location].include? :top
             page.textbox text, { x: center_position, y: top_position }.merge(add_opt)
