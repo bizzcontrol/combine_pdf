@@ -1,6 +1,32 @@
 # Change Log
 
-***
+#### Change log v.1.0.28 (2024-11-12)
+
+**Fix**: use `require` to load code (instead of `load`). Credit to @casperisfine (Jean byroot Boussier) for PR #216.
+
+#### Change log v.1.0.27 (2024-11-10)
+
+**Performance**: fix performance issues with `object_id` usage in Ruby 3+. Credit to @amomchilov (Alexander Momchilov) for PR #241.
+
+**Performance**: use frozen string literals. Credit to @casperisfine (Jean byroot Boussier) for PR #239.
+
+#### Change log v.1.0.26 (2023-12-22)
+
+**Performance**: possible performance bump. Credit to @denislavski (Denislav Naydenov) for opening PR #235.
+
+#### Change log v.1.0.25 (2023-12-19)
+
+**Fix**: possible improve memory usage. Credit to @denislavski (Denislav Naydenov) for opening PR #233 and suggesting this change.
+
+#### Change log v.1.0.24 (2023-10-19)
+
+**Fix**: possible `nil` in loop. Credit to @jkowens for PR #231 and adding a quick fix using a simple guard.
+
+**Fix**: preserve file creation date metadata where relevant.
+
+#### Change log v.1.0.23 (2023-04-04)
+
+**Feature**: merged PR #177 for the `raise_on_encrypted: true` option support. Credit to @leviwilson and @kimyu92 for the PR.
 
 #### Change log v.1.0.22
 
