@@ -25,7 +25,7 @@ load 'combine_pdf/exceptions.rb'
 # load "combine_pdf/operations.rb"
 
 load 'combine_pdf/version.rb'
-
+# TEST CHANGE
 # This is a pure ruby library to combine/merge, stmap/overlay and number PDF files - as well as to create tables (ment for indexing combined files).
 #
 # You can also use this library for writing basic text content into new or existing PDF files (For authoring new PDF files look at the Prawn ruby library).
