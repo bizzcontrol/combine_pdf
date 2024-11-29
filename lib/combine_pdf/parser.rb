@@ -33,7 +33,7 @@ module CombinePDF
     # they are mainly to used to know if the file is (was) encrypted and to get more details.
     attr_reader :info_object, :root_object, :names_object, :forms_object, :outlines_object, :metadata
 
-    attr_reader :allow_optional_content
+    attr_reader :allow_optional_content, :raise_on_encrypted
     # when creating a parser, it is important to set the data (String) we wish to parse.
     #
     # <b>the data is required and it is not possible to set the data at a later stage</b>
@@ -58,6 +58,7 @@ module CombinePDF
       @version = nil
       @scanner = nil
       @allow_optional_content = options[:allow_optional_content]
+      @raise_on_encrypted = options[:raise_on_encrypted]
     end
 
     # parse the data in the new parser (the data already set through the initialize / new method)
@@ -96,6 +97,7 @@ module CombinePDF
       end
 
       if @root_object[:Encrypt]
+        raise EncryptionError, 'the file is encrypted' if @raise_on_encrypted
         # change_references_to_actual_values @root_object
         warn 'PDF is Encrypted! Attempting to decrypt - not yet fully supported.'
         decryptor = PDFDecrypt.new @parsed, @root_object
@@ -260,7 +262,7 @@ module CombinePDF
         ##########################################
         elsif @scanner.scan(/\(/)
           # warn "Found a literal string"
-          str = ''.force_encoding(Encoding::ASCII_8BIT)
+          str = ''.b
           count = 1
           while count > 0 && @scanner.rest?
             scn = @scanner.scan_until(/[\(\)]/)
@@ -321,8 +323,8 @@ module CombinePDF
                 str << 12
               when 48..57 # octal notation for byte?
                 rep -= 48
-                rep = (rep << 3) + (str_bytes.shift-48) if str_bytes[0].between?(48, 57)
-                rep = (rep << 3) + (str_bytes.shift-48) if str_bytes[0].between?(48, 57) && (((rep << 3) + (str_bytes[0] - 48)) <= 255)
+                rep = (rep << 3) + (str_bytes.shift-48) if str_bytes[0]&.between?(48, 57)
+                rep = (rep << 3) + (str_bytes.shift-48) if str_bytes[0]&.between?(48, 57) && (((rep << 3) + (str_bytes[0] - 48)) <= 255)
                 str << rep
               when 10 # new line, ignore
                 str_bytes.shift if str_bytes[0] == 13
@@ -367,7 +369,7 @@ module CombinePDF
           # the following was dicarded because some PDF files didn't have an EOL marker as required
           # str = @scanner.scan_until(/(\r\n|\r|\n)endstream/)
           # instead, a non-strict RegExp is used:
-          
+
 
           # raise error if the stream doesn't end.
           unless @scanner.skip_until(/endstream/)
@@ -377,7 +379,7 @@ module CombinePDF
           length = 0 if(length < 0)
           length -= 1 if(@scanner.string[old_pos + length - 1] == "\n") 
           length -= 1 if(@scanner.string[old_pos + length - 1] == "\r") 
-          str = (length > 0) ? @scanner.string.slice(old_pos, length) : ''
+          str = (length > 0) ? @scanner.string.slice(old_pos, length) : +''
 
           # warn "CombinePDF parser: detected Stream #{str.length} bytes long #{str[0..3]}...#{str[-4..-1]}"
 
@@ -630,17 +632,17 @@ module CombinePDF
     #
     def serialize_objects_and_references
       obj_dir = {}
-      objid_cache = {}
+      objid_cache = {}.compare_by_identity
       # create a dictionary for referenced objects (no value resolution at this point)
       # at the same time, delete duplicates and old versions when objects have multiple versions
       @parsed.uniq!
       @parsed.length.times do |i|
         o = @parsed[i]
-        objid_cache[o.object_id] = i
+        objid_cache[o] = i
         tmp_key = [o[:indirect_reference_id], o[:indirect_generation_number]]
         if tmp_found = obj_dir[tmp_key]
           tmp_found.clear
-          @parsed[objid_cache[tmp_found.object_id]] = nil
+          @parsed[objid_cache[tmp_found]] = nil
         end
         obj_dir[tmp_key] = o
       end
@@ -763,9 +765,9 @@ module CombinePDF
     # end
 
     # # run block of code on evey PDF object (PDF objects are class Hash)
-    # def each_object(object, limit_references = true, already_visited = {}, &block)
+    # def each_object(object, limit_references = true, already_visited = {}.compare_by_identity, &block)
     # 	unless limit_references
-    # 		already_visited[object.object_id] = true
+    # 		already_visited[object] = true
     # 	end
     # 	case
     # 	when object.is_a?(Array)
@@ -774,7 +776,7 @@ module CombinePDF
     # 		yield(object)
     # 		unless limit_references && object[:is_reference_only]
     # 			object.each do |k,v|
-    # 				each_object(v, limit_references, already_visited, &block) unless already_visited[v.object_id]
+    # 				each_object(v, limit_references, already_visited, &block) unless already_visited[v]
     # 			end
     # 		end
     # 	end
