@@ -87,8 +87,10 @@ module CombinePDF
     attr_reader :outlines
     # Access the Names PDF object Hash (or reference). Use with care.
     attr_reader :names
+    # Option to enable/disable the renaming of outlines
+    attr_reader :preserve_names
 
-    def initialize(parser = nil)
+    def initialize(parser = nil, options = {})
       # default before setting
       @objects = []
       @version = 0
@@ -106,6 +108,11 @@ module CombinePDF
       @names = parser.names_object || {}
       @forms_data = parser.forms_object || {}
       @outlines = parser.outlines_object || {}
+      @current_outline_grouper = @outlines
+
+      # Default is to preserve all names (unlike the original gem)
+      @preserve_names = options[:preserve_names] != false
+
       # rebuild the catalog, to fix wkhtmltopdf's use of static page numbers
       rebuild_catalog
 
@@ -316,6 +323,7 @@ module CombinePDF
     def insert(location, data)
       pages_to_add = nil
       if data.is_a? PDF
+        @preserve_names = data.preserve_names
         @version = [@version, data.version].max
         pages_to_add = data.pages
         actual_value(@names ||= {}.dup).update data.names, &HASH_MERGE_NEW_NO_PAGE
@@ -383,6 +391,7 @@ module CombinePDF
         start_at: 1,
         font: :Helvetica,
         margin_from_height: 45,
+        margin_from_height_landscape: 45,
         margin_from_side: 15
       }
       opt.update options
@@ -396,19 +405,21 @@ module CombinePDF
 
       # some common computations can be done only once.
       from_height = opt[:margin_from_height]
+      from_height_landscape = opt[:margin_from_height_landscape]
       from_side = opt[:margin_from_side]
       left_position = from_side
 
       (opt[:page_range] ? pages[opt[:page_range]] : pages).each do |page|
         # Get page dimensions
         mediabox = page[:CropBox] || page[:MediaBox] || [0, 0, 595.3, 841.9]
+        landscape = page.orientation == :landscape
         # set stamp text
         text = opt[:number_format] % (Array.new(format_repeater) { page_number })
         if opt[:location].include? :center
           add_opt = {}
-          if opt[:margin_from_height] && !opt[:height] && !opt[:y]
-            add_opt[:height] = mediabox[3] - mediabox[1] - (2 * opt[:margin_from_height].to_f)
-            add_opt[:y] = opt[:margin_from_height]
+          if (landscape ? opt[:margin_from_height_landscape] : opt[:margin_from_height]) && !opt[:height] && !opt[:y]
+            add_opt[:height] = mediabox[3] - mediabox[1] - (2 * (landscape ? opt[:margin_from_height_landscape] : opt[:margin_from_height]).to_f)
+            add_opt[:y] = (landscape ? opt[:margin_from_height_landscape] : opt[:margin_from_height])
           end
           if opt[:margin_from_side] && !opt[:width] && !opt[:x]
             add_opt[:width] = mediabox[2] - mediabox[0] - (2 * opt[:margin_from_side].to_f)
@@ -431,8 +442,8 @@ module CombinePDF
 
           center_position = (page_width - box_width) / 2
           right_position = page_width - from_side - box_width
-          top_position = page_height - from_height
-          bottom_position = from_height + box_height
+          top_position = page_height - (landscape ? from_height_landscape : from_height)
+          bottom_position = (landscape ? from_height_landscape : from_height) + box_height
 
           if opt[:location].include? :top
             page.textbox text, { x: center_position, y: top_position }.merge(add_opt)
@@ -515,5 +526,68 @@ module CombinePDF
     # 	end
     # 	nil
     # end
+
+     # This method adds a new node to the Outlines dictionary and references it
+    # as the current outline grouper, this means that new feature outline nodes
+    # are going to be added as children of this one. This method takes
+    # 2 parameters:
+    #
+    # page:: the page to which the outline will point.
+    # title:: the title for the outline.
+    def add_outline_grouper(page, title)
+      # The page param must be a Hash "Page" object
+      unless page.is_a?(Hash) && actual_object(page)[:Type] == :Page
+        warn "Shouldn't point object from outline unless it is a PDF page."
+        return false
+      end
+
+      # The title param must be a string object
+      unless title.is_a?(String)
+        warn 'Title for outline should be a String object'
+        return false
+      end
+
+      # Reference the new outline node as the current outline grouper in
+      # the tree hierarchy
+      @current_outline_grouper = actual_object(add_outline_node(page, title))
+    end
+
+    # This method adds a new node to the Outlines dictionary in the current
+    # outline grouper. This method takes 2 parameters:
+    #
+    # page:: the page to which the outline will point.
+    # title:: the title for the outline.
+    def add_outline_item(page, title)
+      # The page param must be a Hash "Page" object
+      unless page.is_a?(Hash) && actual_object(page)[:Type] == :Page
+        warn "Shouldn't point object from outline unless it is a PDF page."
+        return false
+      end
+
+      # The title param must be a string object
+      unless title.is_a?(String)
+        warn 'Title for outline should be a String object'
+        return false
+      end
+
+      add_outline_node(page, title)
+    end
+
+    # This method takes the current outline grouper out one level in the tree
+    # hierarchy of the Outlines.
+    def go_out_outline_grouping_level
+      return if @current_outline_grouper.nil? || outline_root?(@current_outline_grouper)
+
+      @current_outline_grouper = actual_object(@current_outline_grouper[:Parent])
+    end
+
+    # This method takes the current outline grouper to the root level in the
+    # tree hierarchy of the Outlines.
+    def go_outline_root
+      return if @current_outline_grouper.nil? || outline_root?(@current_outline_grouper)
+
+      go_out_outline_grouping_level
+      go_outline_root
+    end
   end
 end
