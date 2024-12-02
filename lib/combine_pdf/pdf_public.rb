@@ -403,7 +403,11 @@ module CombinePDF
 
       (opt[:page_range] ? pages[opt[:page_range]] : pages).each do |page|
         # Get page dimensions
-        mediabox = page[:CropBox] || page[:MediaBox] || [0, 0, 595.3, 841.9]
+        mediabox = page[:CropBox] || page[:MediaBox]
+        if mediabox.nil?
+          mediabox = [0, 0, 595.3, 841.9]
+          page.mediabox = mediabox
+        end
         landscape = page.orientation == :landscape
         # set stamp text
         text = opt[:number_format] % (Array.new(format_repeater) { page_number })
